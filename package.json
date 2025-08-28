@@ -34,7 +34,7 @@
     "npm",
     "package"
   ],
-  "author": "",
+  "author": "abreto <hi@abreto.email>",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.14.0",

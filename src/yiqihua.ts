@@ -1,5 +1,5 @@
 export interface YiqihuaInput {
-  individuals: Array<{ name: string, amountSpent: number }>;
+  individuals: Array<{ name: string, amountSpent?: number, amountUnits?: number }>;
   decimals?: number; // number of decimal places, default 2 (e.g., cents)
 };
 
@@ -11,7 +11,7 @@ export interface YiqihuaOutput {
 
 export function yiqihua(input: YiqihuaInput): YiqihuaOutput {
   const individuals = input?.individuals ?? [];
-  const decimals = Number.isInteger(input?.decimals) ? Math.max(0, Math.min(8, (input as any).decimals)) : 2;
+  const decimals = input?.decimals !== undefined ? Math.max(0, Math.min(8, Math.floor(input.decimals))) : 2;
   const multiplier = Math.pow(10, decimals);
   const numberOfPeople = individuals.length;
 
@@ -24,10 +24,28 @@ export function yiqihua(input: YiqihuaInput): YiqihuaOutput {
   }
 
   // Work in integer units (scaled by multiplier) to avoid floating-point errors
-  const amountsInUnits = individuals.map((p) => ({
-    name: p.name,
-    units: Math.round((Number.isFinite(p.amountSpent) ? p.amountSpent : 0) * multiplier),
-  }));
+  const amountsInUnits = individuals.map((p) => {
+    const hasUnits = p.amountUnits !== undefined;
+    const hasSpent = p.amountSpent !== undefined;
+
+    if (hasUnits === hasSpent) {
+      throw new Error('Each individual must provide exactly one of amountUnits or amountSpent');
+    }
+
+    if (hasUnits) {
+      const units = Number(p.amountUnits);
+      if (!Number.isFinite(units) || Math.floor(units) !== units || units < 0) {
+        throw new Error('amountUnits must be a non-negative integer');
+      }
+      return { name: p.name, units };
+    }
+
+    const spent = Number(p.amountSpent);
+    if (!Number.isFinite(spent) || spent < 0) {
+      throw new Error('amountSpent must be a non-negative finite number');
+    }
+    return { name: p.name, units: Math.round(spent * multiplier) };
+  });
 
   const totalUnits = amountsInUnits.reduce((sum, p) => sum + p.units, 0);
   const averageUnitsFloor = Math.floor(totalUnits / numberOfPeople);

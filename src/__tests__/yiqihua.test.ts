@@ -77,9 +77,9 @@ describe('yiqihua', () => {
     const result = yiqihua({
       decimals: 0,
       individuals: [
-        { name: 'A', amountSpent: 1 },
-        { name: 'B', amountSpent: 0 },
-        { name: 'C', amountSpent: 0 },
+        { name: 'A', amountUnits: 1 },
+        { name: 'B', amountUnits: 0 },
+        { name: 'C', amountUnits: 0 },
       ],
     });
     // total = 1, avg = floor(1/3)=0, remainder=1 -> highest spender A gets +1 share
@@ -93,9 +93,9 @@ describe('yiqihua', () => {
     const result = yiqihua({
       decimals: 3,
       individuals: [
-        { name: 'X', amountSpent: 1.234 },
-        { name: 'Y', amountSpent: 0.000 },
-        { name: 'Z', amountSpent: 0.002 },
+        { name: 'X', amountUnits: 1234 },
+        { name: 'Y', amountUnits: 0 },
+        { name: 'Z', amountUnits: 2 },
       ],
     });
     // total = 1.236, avg = 0.412
@@ -105,6 +105,33 @@ describe('yiqihua', () => {
     const totalTransfers = result.settlements.reduce((s, t) => s + t.amount, 0);
     const target = (0.412 - 0) + (0.412 - 0.002);
     expect(totalTransfers).toBeCloseTo(target, 10);
+  });
+
+  it('accepts amountUnits or amountSpent but not both per person', () => {
+    // amountUnits path
+    const r1 = yiqihua({ decimals: 2, individuals: [
+      { name: 'U', amountUnits: 100 },
+      { name: 'V', amountUnits: 0 },
+    ]});
+    expect(r1.totalAmount).toBe(1);
+    // amountSpent path
+    const r2 = yiqihua({ decimals: 2, individuals: [
+      { name: 'U', amountSpent: 1 },
+      { name: 'V', amountSpent: 0 },
+    ]});
+    expect(r2.totalAmount).toBe(1);
+
+    // invalid mixed per person should throw
+    expect(() => yiqihua({ decimals: 2, individuals: [
+      { name: 'X', amountUnits: 100, amountSpent: 1 },
+      { name: 'Y', amountUnits: 0 },
+    ]})).toThrowError();
+
+    // missing both should throw
+    expect(() => yiqihua({ decimals: 2, individuals: [
+      { name: 'A' } as any,
+      { name: 'B', amountUnits: 0 },
+    ]})).toThrowError();
   });
 });
 

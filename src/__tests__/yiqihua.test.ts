@@ -72,6 +72,40 @@ describe('yiqihua', () => {
     expect(s.to).toBe('P3');
     expect(s.amount).toBeCloseTo(0.1, 10);
   });
+
+  it('supports decimals = 0 (integer currency)', () => {
+    const result = yiqihua({
+      decimals: 0,
+      individuals: [
+        { name: 'A', amountSpent: 1 },
+        { name: 'B', amountSpent: 0 },
+        { name: 'C', amountSpent: 0 },
+      ],
+    });
+    // total = 1, avg = floor(1/3)=0, remainder=1 -> highest spender A gets +1 share
+    // shares: A:1, B:0, C:0; balances all zero -> no settlements
+    expect(result.totalAmount).toBe(1);
+    expect(result.averageAmount).toBeCloseTo(1/3, 10);
+    expect(result.settlements).toEqual([]);
+  });
+
+  it('supports decimals = 3 (milli-units)', () => {
+    const result = yiqihua({
+      decimals: 3,
+      individuals: [
+        { name: 'X', amountSpent: 1.234 },
+        { name: 'Y', amountSpent: 0.000 },
+        { name: 'Z', amountSpent: 0.002 },
+      ],
+    });
+    // total = 1.236, avg = 0.412
+    expect(result.totalAmount).toBeCloseTo(1.236, 10);
+    expect(result.averageAmount).toBeCloseTo(0.412, 10);
+    // sanity: sum of transfers equals sum of debtor deficits
+    const totalTransfers = result.settlements.reduce((s, t) => s + t.amount, 0);
+    const target = (0.412 - 0) + (0.412 - 0.002);
+    expect(totalTransfers).toBeCloseTo(target, 10);
+  });
 });
 
 

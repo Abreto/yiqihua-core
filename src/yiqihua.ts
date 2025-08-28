@@ -1,5 +1,6 @@
 export interface YiqihuaInput {
   individuals: Array<{ name: string, amountSpent: number }>;
+  decimals?: number; // number of decimal places, default 2 (e.g., cents)
 };
 
 export interface YiqihuaOutput {
@@ -10,6 +11,8 @@ export interface YiqihuaOutput {
 
 export function yiqihua(input: YiqihuaInput): YiqihuaOutput {
   const individuals = input?.individuals ?? [];
+  const decimals = Number.isInteger(input?.decimals) ? Math.max(0, Math.min(8, (input as any).decimals)) : 2;
+  const multiplier = Math.pow(10, decimals);
   const numberOfPeople = individuals.length;
 
   if (numberOfPeople === 0) {
@@ -20,21 +23,31 @@ export function yiqihua(input: YiqihuaInput): YiqihuaOutput {
     };
   }
 
-  const totalAmount = individuals.reduce((sum, person) => sum + (Number.isFinite(person.amountSpent) ? person.amountSpent : 0), 0);
-  const averageAmount = totalAmount / numberOfPeople;
+  // Work in integer units (scaled by multiplier) to avoid floating-point errors
+  const amountsInUnits = individuals.map((p) => ({
+    name: p.name,
+    units: Math.round((Number.isFinite(p.amountSpent) ? p.amountSpent : 0) * multiplier),
+  }));
 
-  const epsilon = 1e-9;
+  const totalUnits = amountsInUnits.reduce((sum, p) => sum + p.units, 0);
+  const averageUnitsFloor = Math.floor(totalUnits / numberOfPeople);
+  const remainder = totalUnits % numberOfPeople; // number of people that should pay one extra unit
+
+  // Assign the +1 unit share to those who spent the most to reduce transfers
+  const bySpentDesc = [...amountsInUnits].sort((a, b) => b.units - a.units);
+  const namesWhoPayExtraUnit = new Set(bySpentDesc.slice(0, remainder).map((p) => p.name));
 
   type Party = { name: string; amount: number };
   const creditors: Party[] = [];
   const debtors: Party[] = [];
 
-  for (const person of individuals) {
-    const balance = person.amountSpent - averageAmount;
-    if (balance > epsilon) {
-      creditors.push({ name: person.name, amount: balance });
-    } else if (balance < -epsilon) {
-      debtors.push({ name: person.name, amount: -balance });
+  for (const { name, units } of amountsInUnits) {
+    const share = averageUnitsFloor + (namesWhoPayExtraUnit.has(name) ? 1 : 0);
+    const balanceUnits = units - share;
+    if (balanceUnits > 0) {
+      creditors.push({ name, amount: balanceUnits });
+    } else if (balanceUnits < 0) {
+      debtors.push({ name, amount: -balanceUnits });
     }
   }
 
@@ -50,25 +63,24 @@ export function yiqihua(input: YiqihuaInput): YiqihuaOutput {
     const creditor = creditors[creditorIndex];
     const debtor = debtors[debtorIndex];
 
-    const transferAmount = Math.min(creditor.amount, debtor.amount);
-
-    if (transferAmount > epsilon) {
-      settlements.push({ from: debtor.name, to: creditor.name, amount: transferAmount });
-      creditor.amount -= transferAmount;
-      debtor.amount -= transferAmount;
+    const transferUnits = Math.min(creditor.amount, debtor.amount);
+    if (transferUnits > 0) {
+      settlements.push({ from: debtor.name, to: creditor.name, amount: transferUnits / multiplier });
+      creditor.amount -= transferUnits;
+      debtor.amount -= transferUnits;
     }
 
-    if (creditor.amount <= epsilon) {
+    if (creditor.amount === 0) {
       creditorIndex += 1;
     }
-    if (debtor.amount <= epsilon) {
+    if (debtor.amount === 0) {
       debtorIndex += 1;
     }
   }
 
   return {
-    totalAmount,
-    averageAmount,
+    totalAmount: totalUnits / multiplier,
+    averageAmount: totalUnits / multiplier / numberOfPeople,
     settlements,
   };
 }

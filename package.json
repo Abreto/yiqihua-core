@@ -1,7 +1,7 @@
 {
   "name": "yiqihua-core",
   "version": "0.1.0",
-  "description": "Modern JavaScript package",
+  "description": "Core utilities for Yiqihua functionality with TypeScript support",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
